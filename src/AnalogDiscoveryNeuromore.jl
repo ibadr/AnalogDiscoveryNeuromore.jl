@@ -52,7 +52,8 @@ function go()
   adbufsize64 = Int64(adbufsize)
   analogInFrequencySet(hdwf,fs)
   analogInBufferSizeSet(hdwf,adbufsize)
-  analogInAcquisitionModeSet(hdwf,ACQMODESINGLE)
+  analogInAcquisitionModeSet(hdwf,ACQMODERECORD)
+  analogInRecordLengthSet(hdwf,runForMin*60.0)
 
   chVoltMin,chVoltMax,chSteps = analogInChannelRangeInfo(hdwf)
   chCount = analogInChannelCount(hdwf)
@@ -63,7 +64,7 @@ function go()
   end
 
   sock = UDPSocket(); const localh = ip"127.0.0.1"
-  # const fs3_4 = fs*3/4
+  const fs_Int32 = round(Int32,fs)
   # Collect s-sec worth of data
   const s = 60*runForMin
   blks = Int(ceil(s*fs/adbufsize))
@@ -80,41 +81,43 @@ function go()
   udpBuf = Array{UInt8,1}(16)
 
   # Prefill
-  analogInConfigure(hdwf,false,true) # Start a single acquistion
-  status = analogInStatus(hdwf,true)
-  while status != DWFSTATEDONE
-    status = analogInStatus(hdwf,true)
+  sleep(2.0)
+  analogInConfigure(hdwf,false,true) # Start acquistion
+  status = analogInStatus(hdwf,false); avail,lost,corrupt = analogInStatusRecord(hdwf)
+  while avail < round(Int32,fs)
+    status = analogInStatus(hdwf,false)
+    avail,lost,corrupt = analogInStatusRecord(hdwf)
   end
-  # Discard the first single acquisition for it has transients
-  # Start another single acquisition
-  analogInConfigure(hdwf,false,true)
-  status = analogInStatus(hdwf,true)
-  while status != DWFSTATEDONE
-    status = analogInStatus(hdwf,true)
-  end
+  # # Discard the first sec for it has transients
+  # @show avail
+  # status = analogInStatus(hdwf,true); avail,lost,corrupt = analogInStatusRecord(hdwf)
+  # @show avail
+  # while avail != round(Int32,fs)
+  #   status = analogInStatus(hdwf,false); avail,lost,corrupt = analogInStatusRecord(hdwf)
+  # end
 
+  status = analogInStatus(hdwf,true); avail,lost,corrupt = analogInStatusRecord(hdwf)
+  @show (avail,lost,corrupt)
   chState.writeSecondBuf = false
   for ch in Int32(0):(twoChannels?Int32(chCount-1):Int32(0))
     chdbuf = (ch==0)?ch1dbuf:ch2dbuf
     writeBuf::Vector{Float64} = chState.writeSecondBuf?chdbuf.chDataBuf2:chdbuf.chDataBuf1
     analogInStatusData!(writeBuf,hdwf,ch)
   end
-  # Start another single acquistion for the future
-  analogInConfigure(hdwf,false,true)
-  status = analogInStatus(hdwf,true)
   chState.writeSecondBuf = true
-
-  # Give 0.1-sec head start
-  startT = Libc.time();
-  while Libc.time()-startT < 0.1
-  end
 
   startT = Libc.time(); t = -1;
   chState.readSecondBuf = true # to be flipped later as soon as it enters the main loop
   chState.waitForWriteFinish::Bool = false # we already did write one buffer
+  status = analogInStatus(hdwf,false); avail,lost,corrupt = analogInStatusRecord(hdwf)
+  @show (avail,lost,corrupt)
   @inbounds while t < blks*adbufsize-1
-    if status == DWFSTATEDONE
-      # @show ("UP",t,chState.waitForWriteFinish,chState.readSecondBuf,chState.writeSecondBuf)
+    if avail >= fs_Int32
+      # @show ("1",avail,lost,corrupt)
+      status = analogInStatus(hdwf,true) # read one buffer
+      avail,lost,corrupt = analogInStatusRecord(hdwf)
+      # @show ("2",avail,lost,corrupt)
+      # @show ("UP",t%adbufsize64,chState.waitForWriteFinish,chState.readSecondBuf,chState.writeSecondBuf)
       if chState.waitForWriteFinish || (chState.writeSecondBuf != chState.readSecondBuf) # avoid writing to the same read buffer
         for ch in Int32(0):(twoChannels?Int32(chCount-1):Int32(0))
           # Grab current buffer
@@ -122,10 +125,9 @@ function go()
           writeBuf::Vector{Float64} = chState.writeSecondBuf?chdbuf.chDataBuf2:chdbuf.chDataBuf1
           analogInStatusData!(writeBuf,hdwf,ch)
         end
-        # # Start another single acquistion for the future
-        # analogInConfigure(hdwf,false,true)
         chState.writeSecondBuf = !chState.writeSecondBuf
-        status = analogInStatus(hdwf,false)
+        # status = analogInStatus(hdwf,false); avail,lost,corrupt = analogInStatusRecord(hdwf)
+        # @show ("3",avail,lost,corrupt)
       end
     end
 
@@ -161,13 +163,8 @@ function go()
     end
 
     if (chState.waitForWriteFinish || (theorT-currT > 0.001))# && ((fs-t%adbufsize64 <= fs3_4) || (t%adbufsize64==0))
-      status = analogInStatus(hdwf,false)
-      if status == DWFSTATEDONE
-        status = analogInStatus(hdwf,true) # read the data (takes >1ms!, eventually accumulates to very large acquisition latency)
-        # Start another single acquistion for the future
-        analogInConfigure(hdwf,false,true)
-        # @show (t%adbufsize64,status)
-      end
+      status = analogInStatus(hdwf,false); avail,lost,corrupt = analogInStatusRecord(hdwf)
+      # @show (avail,lost,corrupt)
     end
   end
 
