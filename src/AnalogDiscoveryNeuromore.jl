@@ -5,7 +5,7 @@ using AnalogDiscovery
 include("RingBuffer.jl")
 
 const fs = 512.0
-const runForMin = 0.5
+const runForMin = 180
 const twoChannels = true
 const lowVolt = false
 
@@ -58,9 +58,7 @@ function go()
   const fs_Int32 = round(Int32,fs)
   # Collect s-sec worth of data
   const s = 60*runForMin
-  blks = Int(ceil(s*fs/adbufsize))
-  # chData::Vector{Vector{Float64}} = [Vector{Float64}(blks*adbufsize) for i in 1:chCount]
-  tBuf = Vector{Float64}(blks*adbufsize)
+  tBuf = Vector{Float64}(ceil(Int32,s*fs))
 
   # RingBuffers
   ch1buf = RingBuffer(Vector{Float64}(adbufsize),1,1)
@@ -70,7 +68,7 @@ function go()
   # Buffer for OSC packets sent over UDP
   udpBuf = Array{UInt8,1}(16)
 
-  # sleep(2.0)
+  sleep(1.0) # gets rid of offset estimation transient
   analogInConfigure(hdwf,false,true) # Start acquistion
 
   # Prefill
@@ -80,12 +78,11 @@ function go()
   end
   cSamples::Int32 = 0
   chDataBuf = Vector{Float64}(adbufsize)
-  sleep(0.5) # Deliberately introduce latency to improve throughput
+  sleep(0.25) # Deliberately introduce latency to improve throughput
   cAvailable,cLost,cCorrupted = analogInStatusRecord(hdwf)
   cSamples += cLost
   @inbounds for ch in Int32(0):(twoChannels?Int32(chCount-1):Int32(0))
     analogInStatusData!(chDataBuf,hdwf,ch,Int32(cAvailable))
-    # chData[ch+1][cSamples+(1:cAvailable)] = chDataBuf[1:cAvailable]
     for n in 1:Int64(cAvailable)
       if ch==Int32(0)
         enque!(ch1buf,chDataBuf[n])
@@ -97,7 +94,7 @@ function go()
   cSamples += cAvailable
 
   voltVal::Float64 = 0.0
-  nSamples::Int32 = blks*adbufsize
+  nSamples::Int32 = ceil(Int32,s*fs)
   startT = Libc.time(); t = -1
   while t < nSamples-1
     if used(ch1buf) == 0
@@ -118,7 +115,6 @@ function go()
       # get samples
       @inbounds for ch in Int32(0):(twoChannels?Int32(chCount-1):Int32(0))
         analogInStatusData!(chDataBuf,hdwf,ch,Int32(cAvailable))
-        # chData[ch+1][cSamples+(1:cAvailable)] = chDataBuf[1:cAvailable]
         for n in 1:cAvailable
           if ch==0
             enque!(ch1buf,chDataBuf[n])
