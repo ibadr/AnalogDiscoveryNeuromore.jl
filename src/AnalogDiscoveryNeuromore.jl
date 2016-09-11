@@ -4,10 +4,7 @@ using AnalogDiscovery
 
 include("RingBuffer.jl")
 
-const fs = 512.0
-const runForMin = 180
-const twoChannels = true
-const lowVolt = false
+export go
 
 function float32msg!(buffer::Vector{UInt8},ch::Int64,val::Vector{Float32})
   buffer[1:5]=(ch==1) ? "/in/0".data : "/in/1".data
@@ -25,7 +22,7 @@ function float32msg!(buffer::Vector{UInt8},ch::Int64,val::Vector{Float32})
   return buffer
 end
 
-function go()
+function go(fs,runForMin,twoChannels,lowVolt)
   cDev = enumDevices()
   @show ("Available",cDev)
   myDev = Int32(0)
