@@ -78,15 +78,16 @@ function go()
   while status != DWFSTATETRIGGEREDRUNNING
     status = analogInStatus(hdwf,true)
   end
-  cSamples = 0
+  cSamples::Int32 = 0
   chDataBuf = Vector{Float64}(adbufsize)
+  sleep(0.5) # Deliberately introduce latency to improve throughput
   cAvailable,cLost,cCorrupted = analogInStatusRecord(hdwf)
   cSamples += cLost
-  @inbounds for ch in Int32(0):Int32(chCount-1)
+  @inbounds for ch in Int32(0):(twoChannels?Int32(chCount-1):Int32(0))
     analogInStatusData!(chDataBuf,hdwf,ch,Int32(cAvailable))
     # chData[ch+1][cSamples+(1:cAvailable)] = chDataBuf[1:cAvailable]
-    for n in 1:cAvailable
-      if ch==0
+    for n in 1:Int64(cAvailable)
+      if ch==Int32(0)
         enque!(ch1buf,chDataBuf[n])
       else
         enque!(ch2buf,chDataBuf[n])
@@ -95,7 +96,8 @@ function go()
   end
   cSamples += cAvailable
 
-  nSamples = blks*adbufsize
+  voltVal::Float64 = 0.0
+  nSamples::Int32 = blks*adbufsize
   startT = Libc.time(); t = -1
   while t < nSamples-1
     if used(ch1buf) == 0
@@ -114,7 +116,7 @@ function go()
         cAvailable = nSamples-cSamples
       end
       # get samples
-      @inbounds for ch in Int32(0):Int32(chCount-1)
+      @inbounds for ch in Int32(0):(twoChannels?Int32(chCount-1):Int32(0))
         analogInStatusData!(chDataBuf,hdwf,ch,Int32(cAvailable))
         # chData[ch+1][cSamples+(1:cAvailable)] = chDataBuf[1:cAvailable]
         for n in 1:cAvailable
