@@ -42,7 +42,7 @@ function go()
   adbufsize = Int32(min(fs,bmax))
   adbufsize64 = Int64(adbufsize)
   analogInFrequencySet(hdwf,fs)
-  analogInBufferSizeSet(hdwf,adbufsize)
+  analogInBufferSizeSet(hdwf,Int32(bmax)) # must be set at bmax for acqmodeRecord!
   analogInAcquisitionModeSet(hdwf,ACQMODERECORD)
   analogInRecordLengthSet(hdwf,0.0) # run indefinitely
 
