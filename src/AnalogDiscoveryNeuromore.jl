@@ -87,9 +87,9 @@ function go()
     # chData[ch+1][cSamples+(1:cAvailable)] = chDataBuf[1:cAvailable]
     for n in 1:cAvailable
       if ch==0
-        ch1buf = enque(ch1buf,chDataBuf[n])
+        enque!(ch1buf,chDataBuf[n])
       else
-        ch2buf = enque(ch2buf,chDataBuf[n])
+        enque!(ch2buf,chDataBuf[n])
       end
     end
   end
@@ -119,9 +119,9 @@ function go()
         # chData[ch+1][cSamples+(1:cAvailable)] = chDataBuf[1:cAvailable]
         for n in 1:cAvailable
           if ch==0
-            ch1buf = enque(ch1buf,chDataBuf[n])
+            enque!(ch1buf,chDataBuf[n])
           else
-            ch2buf = enque(ch2buf,chDataBuf[n])
+            enque!(ch2buf,chDataBuf[n])
           end
         end
       end
@@ -138,9 +138,9 @@ function go()
         tBuf[t+1] = theorT-currT
         for ch in Int32(0):(twoChannels?Int32(chCount-1):Int32(0))
           if ch==0
-            (voltVal,ch1buf) = deque(ch1buf)
+            voltVal = deque!(ch1buf)
           else
-            (voltVal,ch2buf) = deque(ch2buf)
+            voltVal = deque!(ch2buf)
           end
           valBuf[1] = Float32(voltVal)
           float32msg!(udpBuf,ch+1,valBuf)
