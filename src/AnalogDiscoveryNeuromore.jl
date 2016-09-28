@@ -93,6 +93,7 @@ function go(fs,runForMin,twoChannels,lowVolt)
   voltVal::Float64 = 0.0
   nSamples::Int32 = ceil(Int32,s*fs)
   startT = Libc.time(); t = -1
+  display("Streaming data...")
   while t < nSamples-1
     if used(ch1buf) == 0
       status = analogInStatus(hdwf,true)
